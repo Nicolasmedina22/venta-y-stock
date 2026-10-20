@@ -3,11 +3,14 @@
 #   1. Sube el proyecto a GitHub (la base de datos y build/ NO se suben, lo
 #      encarga .gitignore).
 #   2. En Render: New -> Blueprint -> apunta a tu repositorio.
-#   3. Render te pedira ADMIN_USERNAME y ADMIN_PASSWORD: inventalos.
+#   3. Render te pedira completar las variables marcadas como "sync: false".
 #
-# Ojo: el plan "free" de PostgreSQL en Render caduca a los 30 dias. Para un
-# negocio en produccion usa un plan de pago o una base gratuita permanente
-# como Neon (ver DEPLOY.md).
+# La base de datos NO se crea desde este archivo: el proyecto usa Neon
+# (PostgreSQL gratuito sin caducidad). La cadena de conexion se pega en el
+# panel, porque guardarla en el repositorio publicaria la contrasena.
+#
+# Detalle: el plan "free" de PostgreSQL de Render caduca a los 30 dias. Para
+# un negocio en produccion usa Neon (ver DEPLOY.md).
 
 services:
   - type: web
@@ -30,11 +33,4 @@ services:
       - key: SESSION_COOKIE_SECURE
         value: "1"
       - key: DATABASE_URL
-        fromDatabase:
-          name: venta-y-stock-db
-          property: connectionString
-
-databases:
-  - name: venta-y-stock-db
-    plan: free
-    postgresMajorVersion: "16"
+        sync: false
