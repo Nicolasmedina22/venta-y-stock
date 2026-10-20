@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="pos-container" class="pos-layout">
+  <!-- ===================================================================
+       PANEL IZQUIERDO: Búsqueda y Carrito de Compras
+       =================================================================== -->
+  <div class="pos-left">
+    <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 18px; font-weight: bold; color: #ffffff;">
+        🛒 Punto de Venta
+      </div>
+
+      <!-- Selector de Modo de Búsqueda -->
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 12px; font-weight: bold; color: #d1d5db; white-space: nowrap;">Modo de búsqueda:</span>
+        <div class="segmented-control" style="flex: 1;">
+          <button type="button" id="btn-modo-nombre" class="segmented-btn active">
+            🔍 Buscar por Nombre
+          </button>
+          <button type="button" id="btn-modo-codigo" class="segmented-btn">
+            📷 Lector de Código
+          </button>
+        </div>
+      </div>
+
+      <!-- Modo A: Búsqueda por Nombre -->
+      <div id="panel-modo-nombre" style="display: block;">
+        <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+          <input 
+            type="text" 
+            id="input-busqueda-nombre" 
+            class="form-control" 
+            placeholder="Escribe las primeras letras del producto (ej: torn, mart, yerba)..." 
+            autofocus
+          >
+          <button type="button" class="btn btn-secondary" onclick="limpiarBusquedaNombre()" style="width: 75px;">
+            Limpiar
+          </button>
+        </div>
+
+        <!-- Tabla de Resultados en Vivo -->
+        <div class="table-container" style="height: 145px;">
+          <div class="table-scroll">
+            <table class="ctk-table">
+              <thead>
+                <tr>
+                  <th style="width: 105px;">Código</th>
+                  <th>Producto</th>
+                  <th style="width: 110px;">Categoría</th>
+                  <th style="width: 85px;" class="text-right">Precio</th>
+                  <th style="width: 80px;" class="text-center">Stock</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-busqueda">
+                {% for p in productos_iniciales %}
+                <tr 
+                  data-id="{{ p.id }}" 
+                  data-producto='{{ p|tojson }}'
+                  class="{% if p.stock <= 0 %}tag-agotado{% elif p.stock <= 10 %}tag-stock_bajo{% else %}tag-normal{% endif %} {% if loop.first %}selected{% endif %}"
+                >
+                  <td>{{ p.codigo_barras or '-' }}</td>
+                  <td><strong>{{ p.nombre }}</strong></td>
+                  <td>{{ p.categoria or '-' }}</td>
+                  <td class="text-right">${{ "{:,.2f}".format(p.precio_venta or 0) }}</td>
+                  <td class="text-center">{{ p.stock }} {{ p.unidad or 'unidad' }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px;">
+          <span style="font-size: 11px; color: var(--text-muted);">
+            💡 Doble clic o Enter sobre un producto para agregarlo al carrito.
+          </span>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="agregarSeleccionadoBusqueda()">
+              ➕ Agregar al Carrito
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" data-shortcut-key="F10" onclick="abrirModalProductoManual()">
+              Otros <kbd class="shortcut-key shortcut-key-inline">F10</kbd>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modo B: Lector de Código de Barras -->
+      <div id="panel-modo-codigo" style="display: none;">
+        <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+          <input 
+            type="text" 
+            id="input-codigo" 
+            class="form-control" 
+            style="height: 42px;" 
+            placeholder="Escanea con el lector o escribe el código de barras y presiona Enter..."
+          >
+          <button type="button" class="btn btn-primary" style="height: 42px;" onclick="agregarPorCodigo()">
+            ↵ Agregar
+          </button>
+          <button type="button" class="btn btn-secondary" style="height: 42px;" data-shortcut-key="F10" onclick="abrirModalProductoManual()">
+            Otros <kbd class="shortcut-key shortcut-key-inline">F10</kbd>
+          </button>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted);">
+          💡 Modo lector activo: Al escanear el código de barras se añade directamente al carrito.
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN CARRITO DE COMPRA -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column; padding: 14px 16px; min-height: 0;">
+      <div id="lbl-titulo-carrito" style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">
+        🛒 Carrito de Compra (0 productos)
+      </div>
+
+      <div class="table-container" style="flex: 1; min-height: 120px;">
+        <div class="table-scroll">
+          <table class="ctk-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th style="width: 65px;" class="text-center">Cant.</th>
+                <th style="width: 95px;" class="text-right">Precio Unit.</th>
+                <th style="width: 105px;" class="text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-carrito">
+              <!-- Ítems del carrito renderizados con JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Botones de Ajuste del Carrito -->
+      <div style="display: flex; gap: 6px; margin-top: 10px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="cambiarCantidadCarrito(1)">+1 Cantidad</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="cambiarCantidadCarrito(-1)">-1 Cantidad</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="quitarSeleccionadoCarrito()">🗑 Quitar</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="vaciarCarrito()">Vaciar carrito</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================
+       PANEL DERECHO: Resumen de Totales y Confirmación de Venta
+       =================================================================== -->
+  <div class="pos-right">
+    <div class="card" style="height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div style="font-size: 18px; font-weight: bold; margin-bottom: 12px;">
+          Resumen de Venta
+        </div>
+
+        <!-- Tarjeta Total -->
+        <div class="card-total">
+          <div class="card-total-title">TOTAL A COBRAR</div>
+          <div id="lbl-total-venta" class="card-total-amount">$0.00</div>
+        </div>
+
+        <!-- Forma de Pago -->
+        <div style="margin-top: 16px;">
+          <div style="font-size: 13px; font-weight: bold; color: #d1d5db; margin-bottom: 6px;">
+            Forma de pago
+          </div>
+
+          <div class="payment-radio-group">
+            <label class="payment-radio-option">
+              <input type="radio" name="forma_pago" value="efectivo" checked>
+              <span>💵 Efectivo</span>
+            </label>
+            <label class="payment-radio-option">
+              <input type="radio" name="forma_pago" value="tarjeta">
+              <span>🔁 Transferencia</span>
+            </label>
+            <label class="payment-radio-option">
+              <input type="radio" name="forma_pago" value="fiado">
+              <span>📝 Fiado (Cuenta Corriente)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Selección de Cliente para Fiado -->
+        <div style="margin-top: 16px;">
+          <label class="form-label" for="combo-cliente">Cliente para cuenta fiada:</label>
+          <select id="combo-cliente" class="form-control" disabled>
+            <option value="">-- Seleccionar cliente --</option>
+            {% for c in clientes %}
+            <option value="{{ c.id }}">{{ c.nombre }} (Deuda: ${{ "{:,.2f}".format(c.saldo_deuda or 0) }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Mensajes de estado / avisos -->
+        <div id="lbl-estado-venta" style="font-size: 12px; min-height: 18px; margin-top: 12px; color: #10b981;"></div>
+      </div>
+
+      <!-- Botón Confirmar Venta -->
+      <div style="margin-top: 16px;">
+        <button type="button" class="btn btn-success btn-lg" style="width: 100%;" onclick="confirmarVenta()">
+          ✓ Confirmar Venta
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     MODAL: PRODUCTO MANUAL ("Otros")
+     =================================================================== -->
+<div id="modal-producto-manual" class="modal-overlay" onclick="if(event.target === this) cerrarModalProductoManual()">
+  <div class="card" style="width: 380px; max-width: 90vw; background-color: var(--bg-card); border: 1px solid var(--border-color);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+      <h3 style="font-size: 16px; font-weight: bold; color: #ffffff;">➕ Agregar Producto Manual / Externo</h3>
+      <button type="button" onclick="cerrarModalProductoManual()" style="background: none; border: none; color: #9ca3af; font-size: 18px; cursor: pointer;">&times;</button>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Nombre o Concepto:</label>
+      <input type="text" id="manual-nombre" class="form-control" placeholder="Ej: Servicio de flete, corte...">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Precio Unitario ($):</label>
+      <input type="number" step="0.01" id="manual-precio" class="form-control" placeholder="0.00">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Cantidad:</label>
+      <input type="number" id="manual-cantidad" class="form-control" value="1" min="1">
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarModalProductoManual()">Cancelar</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="agregarProductoManual()">Agregar al Carrito</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     MODAL: CONFIRMAR VENTA (Sí / No)
+     =================================================================== -->
+<div id="modal-confirmar-venta" class="modal-overlay" onclick="if(event.target === this) cerrarModalConfirmarVenta()">
+  <div class="card" style="width: 390px; max-width: 90vw; background-color: var(--bg-card); border: 1px solid var(--border-color); text-align: center; padding: 24px 20px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
+    <div style="font-size: 40px; margin-bottom: 6px;">🛒</div>
+    <h3 style="font-size: 18px; font-weight: bold; color: #ffffff; margin-bottom: 8px;">Confirmar Venta</h3>
+    <p id="lbl-confirmar-venta-texto" style="font-size: 14px; color: #d1d5db; line-height: 1.5; margin-bottom: 22px;">
+      ¿Deseas registrar la venta por un total de $0.00?
+    </p>
+
+    <div style="display: flex; gap: 10px; justify-content: center;">
+      <button type="button" class="btn btn-secondary" style="min-width: 120px; height: 42px;" onclick="cerrarModalConfirmarVenta()">
+        ✕ No, cancelar
+      </button>
+      <button type="button" id="btn-modal-si-confirmar" class="btn btn-success" style="min-width: 130px; height: 42px;" onclick="ejecutarVentaConfirmada()">
+        ✓ Sí, confirmar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     MODAL: TICKET DE VENTA (Impresión / Visualización)
+     =================================================================== -->
+<div id="modal-ticket" class="modal-overlay" onclick="if(event.target === this) cerrarModalTicket()">
+  <div class="modal-ticket">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3 style="font-size: 15px; font-weight: bold;">🧾 Ticket de Venta</h3>
+      <button type="button" onclick="cerrarModalTicket()" style="background: none; border: none; color: #9ca3af; font-size: 18px; cursor: pointer;">&times;</button>
+    </div>
+
+    <pre id="ticket-texto-pre" class="ticket-preview"></pre>
+
+    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarModalTicket()">Cerrar</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="imprimirTicket()">🖨 Imprimir Ticket</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="ventas-dia-page" style="display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-bottom: 24px;">
+  <section class="card" style="padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+    <div>
+      <div class="view-title" style="margin-bottom: 4px;">🛒 Ventas del día</div>
+      <div style="font-size: 13px; color: var(--text-muted);">Resumen de ventas no anuladas · {{ fecha_corta }}</div>
+    </div>
+    <form method="GET" action="{{ url_for('ventas_dia') }}" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <label for="fecha-ventas-dia" style="font-size: 13px; font-weight: bold; color: #d1d5db;">Fecha:</label>
+      <input type="date" id="fecha-ventas-dia" name="fecha" value="{{ fecha_seleccionada }}" class="form-control" style="width: 165px; height: 38px; color-scheme: dark;" required>
+      <button type="submit" class="btn btn-primary" style="height: 38px;">🔍 Buscar</button>
+    </form>
+  </section>
+
+  <section class="card" style="padding: 18px 22px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(74, 222, 128, 0.35);">
+    <div style="font-size: 13px; color: var(--text-muted); font-weight: 600;">TOTAL DE VENTAS DEL DÍA</div>
+    <div style="font-size: 32px; line-height: 1.2; color: #4ade80; font-weight: 800; margin-top: 6px;">${{ "{:,.2f}".format(total_productos_vendidos or 0) }}</div>
+    <div style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">{{ cantidad_ventas }} venta(s) registrada(s)</div>
+  </section>
+  <div class="card" style="padding: 16px 20px;">
+    <div class="table-container">
+      <div class="table-scroll" style="max-height: 65vh;">
+        <table class="ctk-table">
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Producto</th>
+              <th class="text-center">Cantidad</th>
+              <th class="text-right">Precio unitario</th>
+              <th class="text-right">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in productos_vendidos %}
+            <tr>
+              <td>{% if 'T' in p.fecha %}{{ p.fecha.split('T')[1][:8] }}{% else %}{{ p.fecha }}{% endif %}</td>
+              <td><strong>{{ p.nombre_producto }}</strong></td>
+              <td class="text-center">{{ p.cantidad }}</td>
+              <td class="text-right">${{ "{:,.2f}".format(p.precio_unitario or 0) }}</td>
+              <td class="text-right" style="color: #4ade80; font-weight: bold;">${{ "{:,.2f}".format(p.subtotal or 0) }}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" style="text-align: center; color: var(--text-dim); padding: 20px;">No hay productos
+                vendidos en esta fecha.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

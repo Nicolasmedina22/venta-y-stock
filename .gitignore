@@ -1,0 +1,52 @@
+# ---------------------------------------------------------------------
+# Datos del negocio: NUNCA deben subirse al repositorio.
+# La base de datos real (ventas, inventario, clientes, fiados) y los
+# respaldos son datos privados del negocio.
+# ---------------------------------------------------------------------
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# ---------------------------------------------------------------------
+# Credenciales y secretos
+# ---------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.py
+
+# ---------------------------------------------------------------------
+# Artefactos de compilacion (36 MB, se regeneran con PyInstaller)
+# ---------------------------------------------------------------------
+build/
+dist/
+*.spec.bak
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---------------------------------------------------------------------
+# Cache de herramientas
+# ---------------------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.vscode/
+.idea/
+
+# ---------------------------------------------------------------------
+# Sistema operativo
+# ---------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Artefactos de desarrollo (no forman parte de la app)
+server_rendered.html
+qa_login.mjs

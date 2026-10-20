@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ NOMBRE_APP }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.8">
+</head>
+<body>
+  <!-- BARRA SUPERIOR PARA PANTALLAS PEQUEÑAS / MÓVILES -->
+  <header class="mobile-topbar">
+    <button type="button" class="mobile-menu-btn" id="btn-toggle-menu" aria-label="Abrir menú" onclick="toggleMenuMobile()">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+    <div class="mobile-topbar-brand">🔧 {{ NOMBRE_APP }}</div>
+    <div style="width: 38px;"></div> <!-- balance spacer -->
+  </header>
+
+  <!-- OVERLAY OSCURO PARA MENÚ MÓVIL -->
+  <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="cerrarMenuMobile()"></div>
+
+  <div class="app-container">
+    <!-- SIDEBAR (Exacto a ui/main_window.py) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span>🔧 {{ NOMBRE_APP }}</span>
+        <button type="button" class="sidebar-close-btn" onclick="cerrarMenuMobile()" aria-label="Cerrar menú">&times;</button>
+      </div>
+
+      <nav class="sidebar-menu">
+        <a href="{{ url_for('venta') }}" data-shortcut-key="F1" class="sidebar-btn {% if pagina_activa == 'venta' %}active{% endif %}">
+          <span>🛒 Venta</span><kbd class="shortcut-key">F1</kbd>
+        </a>
+        <a href="{{ url_for('productos') }}" data-shortcut-key="F2" class="sidebar-btn {% if pagina_activa == 'productos' %}active{% endif %}">
+          <span>📦 Productos</span><kbd class="shortcut-key">F2</kbd>
+        </a>
+        <a href="{{ url_for('clientes') }}" data-shortcut-key="F3" class="sidebar-btn {% if pagina_activa == 'clientes' %}active{% endif %}">
+          <span>👥 Clientes / Fiado</span><kbd class="shortcut-key">F3</kbd>
+        </a>
+        <a href="{{ url_for('caja') }}" data-shortcut-key="F4" class="sidebar-btn {% if pagina_activa == 'caja' %}active{% endif %}">
+          <span>🧾 Cierre de caja</span><kbd class="shortcut-key">F4</kbd>
+        </a>
+        <a href="{{ url_for('ingresos_egresos') }}" data-shortcut-key="F5" class="sidebar-btn {% if pagina_activa == 'ingresos_egresos' %}active{% endif %}">
+          <span>⬆️ Otros Ingresos / Egresos</span><kbd class="shortcut-key">F5</kbd>
+        </a>
+
+        {% if usuario_actual and usuario_actual.rol == 'admin' %}
+        <a href="{{ url_for('historial_caja') }}" data-shortcut-key="F6" class="sidebar-btn {% if pagina_activa == 'historial_caja' %}active{% endif %}">
+          <span>📅 Historial de caja</span><kbd class="shortcut-key">F6</kbd>
+        </a>
+        <a href="{{ url_for('ventas_dia', fecha=fecha_seleccionada|default(hoy_str_iso, true)) }}" data-shortcut-key="F7" class="sidebar-btn {% if pagina_activa == 'ventas_dia' %}active{% endif %}">
+          <span>🛒 Ventas del día</span><kbd class="shortcut-key">F7</kbd>
+        </a>
+        {% endif %}
+
+        <button type="button" data-shortcut-key="F8" class="sidebar-btn btn-sidebar-calc" onclick="abrirCalculadora()">
+          <span>🧮 Calculadora</span><kbd class="shortcut-key">F8</kbd>
+        </button>
+
+        <button type="button" data-shortcut-key="F9" class="sidebar-btn btn-sidebar-notas" onclick="abrirBlockNotas()">
+          <span>📝 Block de notas</span><kbd class="shortcut-key">F9</kbd>
+        </button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+
+      <div class="sidebar-footer">
+        <div class="version-tag">v{{ VERSION_APP }}</div>
+      </div>
+    </aside>
+
+    <!-- CONTENIDO DE CADA VISTA -->
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <!-- MODAL: CALCULADORA (Exacto a ui/main_window.py) -->
+  <div id="modal-calculadora" class="modal-overlay" onclick="if(event.target === this) cerrarCalculadora()">
+    <div class="modal-calculadora">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span style="font-size: 13px; font-weight: bold; color: #9ca3af;">🧮 Calculadora - {{ NOMBRE_APP }}</span>
+        <button type="button" onclick="cerrarCalculadora()" style="background: none; border: none; color: #9ca3af; font-size: 18px; cursor: pointer;">&times;</button>
+      </div>
+
+      <input type="text" id="calc-display" class="calc-display" readonly value="0">
+
+      <div class="calc-grid">
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcLimpiar()">C</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcBorrar()">⌫</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcClick('/')">/</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcClick('*')">*</button>
+
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('7')">7</button>
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('8')">8</button>
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('9')">9</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcClick('-')">-</button>
+
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('4')">4</button>
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('5')">5</button>
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('6')">6</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcClick('+')">+</button>
+
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('1')">1</button>
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('2')">2</button>
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('3')">3</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcClick('%')">%</button>
+
+        <button type="button" class="calc-btn calc-btn-num" style="grid-column: span 1;" onclick="calcClick('0')">0</button>
+        <button type="button" class="calc-btn calc-btn-num" onclick="calcClick('.')">.</button>
+        <button type="button" class="calc-btn calc-btn-eq" style="grid-column: span 2;" onclick="calcIgual()">=</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BLOCK DE NOTAS (Exacto a ui/block_notas_simple.py) -->
+  <div id="modal-block-notas" class="modal-overlay" onclick="if(event.target === this) cerrarBlockNotas()">
+    <div class="modal-block-notas">
+      <div class="notepad-navbar">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="notaAnterior()">← Hoja Anterior</button>
+        <div style="text-align: center;">
+          <div id="notepad-page-lbl" style="font-weight: bold; color: #1f2937; font-size: 14px;">Hoja 1 de 365</div>
+          <div id="notepad-date-lbl" style="font-weight: bold; color: #0f766e; font-size: 13px;">{{ hoy_str }}</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="notaSiguiente()">Siguiente Hoja →</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="cerrarBlockNotas()">Cerrar</button>
+        </div>
+      </div>
+      <textarea id="notepad-text" class="notepad-textarea" placeholder="Escribe notas aquí... Se guardan automáticamente."></textarea>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.0.9"></script>
+</body>
+</html>

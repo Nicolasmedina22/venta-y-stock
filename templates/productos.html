@@ -1,0 +1,760 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; height: 100%;">
+  <!-- Cabecera -->
+  <div class="view-header">
+    <div class="view-title">📦 Catálogo de Productos e Inventario</div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <button type="button" class="btn btn-success btn-sm" onclick="abrirModalImportarExcel()">📥 Importar productos</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalCategorias()">🏷 Gestionar Categorías</button>
+      <a href="{{ url_for('productos') }}" class="btn btn-primary btn-sm">🔄 Actualizar datos</a>
+    </div>
+  </div>
+
+  <!-- Tarjetas KPI -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Productos</div>
+      <div class="kpi-value">{{ kpis.total_productos or 0 }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Unidades en Stock</div>
+      <div class="kpi-value">{{ kpis.unidades_stock or 0 }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Valor en Tienda (Venta)</div>
+      <div class="kpi-value">${{ "{:,.2f}".format(kpis.valor_total_tienda or 0) }}</div>
+    </div>
+    <div class="kpi-card kpi-card-danger">
+      <div class="kpi-label kpi-label-danger">Stock Bajo (≤ 10)</div>
+      <div class="kpi-value kpi-value-danger">{{ kpis.stock_bajo or 0 }}</div>
+    </div>
+  </div>
+
+  <!-- Layout: Inventario (Izquierda) + Formulario (Derecha) -->
+  <div class="productos-layout">
+    <!-- PANEL IZQUIERDO: Buscador y Tabla -->
+    <div class="card" style="display: flex; flex-direction: column; padding: 12px 14px; min-height: 0;">
+      <!-- Filtros -->
+      <form method="GET" action="{{ url_for('productos') }}" id="form-filtro-productos" style="display: flex; gap: 8px; margin-bottom: 10px;">
+        <input
+          type="text"
+          id="input-filtro-productos"
+          name="q"
+          value="{{ busqueda_actual }}"
+          class="form-control"
+          placeholder="🔍 Escribe para buscar (ej: tor, tornillo, mart)..."
+          style="flex: 1;"
+          autocomplete="off"
+        >
+        <select name="categoria" id="select-categoria-productos" class="form-control" style="width: 150px;" onchange="this.form.submit()">
+          <option value="Todas" {% if categoria_seleccionada == 'Todas' %}selected{% endif %}>Todas</option>
+          {% for cat in categorias %}
+          <option value="{{ cat }}" {% if categoria_seleccionada == cat %}selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary">Filtrar</button>
+      </form>
+
+      <!-- Tabla de Productos -->
+      <div class="table-container" style="flex: 1; min-height: 200px;">
+        <div class="table-scroll">
+          <table class="ctk-table" id="tabla-productos">
+            <thead>
+              <tr>
+                <th style="width: 105px;">Código</th>
+                <th>Nombre</th>
+                <th style="width: 100px;">Categoría</th>
+                <th style="width: 75px;" class="text-right">Costo</th>
+                <th style="width: 80px;" class="text-right">Precio</th>
+                <th style="width: 75px;" class="text-center">Stock</th>
+                <th style="width: 65px;" class="text-center">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in productos %}
+              <tr 
+                data-id="{{ p.id }}" 
+                data-json='{{ p|tojson }}' 
+                tabindex="0"
+                class="{% if p.stock <= 0 %}tag-agotado{% elif p.stock <= 10 %}tag-stock_bajo{% else %}tag-normal{% endif %}"
+                onclick="seleccionarFilaProducto(this)"
+              >
+                <td>{{ p.codigo_barras }}</td>
+                <td><strong>{{ p.nombre }}</strong></td>
+                <td>{{ p.categoria or '-' }}</td>
+                <td class="text-right">${{ "{:,.2f}".format(p.costo or 0) }}</td>
+                <td class="text-right">${{ "{:,.2f}".format(p.precio_venta or 0) }}</td>
+                <td class="text-center">{{ p.stock }} {{ p.unidad }}</td>
+                <td class="text-center">
+                  {% if p.activo %}
+                    <span style="color: #4ade80; font-size: 11px;">Activo</span>
+                  {% else %}
+                    <span style="color: #ef4444; font-size: 11px;">Inactivo</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                  No hay productos registrados con estos filtros.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Barra de acciones rápidas -->
+      <div style="display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalSumarStock()">➕ Sumar Stock</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalAjustarStock()">✏️ Ajustar Stock</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="alternarEstadoProducto()">🔄 Activar/Desactivar</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarProductoSeleccionado()">🗑 Eliminar</button>
+      </div>
+    </div>
+
+    <!-- PANEL DERECHO: Formulario de Registro / Edición -->
+    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; overflow-y: auto;">
+      <div>
+        <div id="form-titulo" style="font-size: 16px; font-weight: bold; margin-bottom: 12px; color: #ffffff;">
+          Registrar Producto
+        </div>
+
+        <input type="hidden" id="prod-id" value="">
+
+        <div class="form-group">
+          <label class="form-label">Código de Barras:</label>
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="prod-codigo" class="form-control" placeholder="Escanea o escribe el código" required>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="generarCodigoBarrasAleatorio()" title="Generar código automático">🎲 Generar</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Nombre del Producto:</label>
+          <input type="text" id="prod-nombre" class="form-control" placeholder="Ej: Tornillo hexagonal 1/4" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Categoría:</label>
+          <select id="prod-categoria" class="form-control">
+            {% for cat in categorias %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label">Costo ($):</label>
+            <input type="number" step="0.01" id="prod-costo" class="form-control" placeholder="0.00" value="0.00">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Precio Venta ($):</label>
+            <input type="number" step="0.01" id="prod-precio" class="form-control" placeholder="0.00" value="0.00">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;" id="row-stock-inicial">
+          <div class="form-group">
+            <label class="form-label">Stock Inicial:</label>
+            <input type="number" id="prod-stock" class="form-control" placeholder="0" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unidad de Medida:</label>
+            <select id="prod-unidad" class="form-control">
+              <option value="unidad">unidad</option>
+              <option value="metro">metro</option>
+              <option value="kilo">kilo</option>
+              <option value="litro">litro</option>
+              <option value="par">par</option>
+              <option value="bolsa">bolsa</option>
+              <option value="caja">caja</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 14px;">
+        <button type="button" id="btn-guardar-prod" class="btn btn-primary" onclick="guardarProducto()">
+          Guardar Producto
+        </button>
+        <button type="button" id="btn-cancelar-edicion" class="btn btn-secondary btn-sm" style="display: none;" onclick="cancelarEdicionProducto()">
+          Cancelar edición
+        </button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="limpiarFormularioProducto()">
+          Limpiar formulario
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     MODAL: SUMAR STOCK
+     =================================================================== -->
+<div id="modal-sumar-stock" class="modal-overlay" onclick="if(event.target === this) cerrarModalSumarStock()">
+  <div class="card" style="width: 320px;">
+    <h3 style="font-size: 15px; font-weight: bold; margin-bottom: 10px;">➕ Entrada de Stock</h3>
+    <div id="lbl-sumar-stock-prod" style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;"></div>
+    <div class="form-group">
+      <label class="form-label">Cantidad a sumar:</label>
+      <input type="number" id="input-sumar-cant" class="form-control" value="1" min="1">
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px;">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarModalSumarStock()">Cancelar</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="confirmarSumarStock()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     MODAL: AJUSTAR STOCK (Fijar existencia exacta)
+     =================================================================== -->
+<div id="modal-ajustar-stock" class="modal-overlay" onclick="if(event.target === this) cerrarModalAjustarStock()">
+  <div class="card" style="width: 320px;">
+    <h3 style="font-size: 15px; font-weight: bold; margin-bottom: 10px;">✏️ Ajustar Existencias</h3>
+    <div id="lbl-ajustar-stock-prod" style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;"></div>
+    <div class="form-group">
+      <label class="form-label">Nuevo Stock Real:</label>
+      <input type="number" id="input-ajustar-cant" class="form-control" value="0" min="0">
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px;">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarModalAjustarStock()">Cancelar</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="confirmarAjustarStock()">Guardar Ajuste</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     MODAL: IMPORTAR PRODUCTOS DESDE EXCEL
+     =================================================================== -->
+<div id="modal-importar-excel" class="modal-overlay" onclick="if(event.target === this) cerrarModalImportarExcel()">
+  <div class="card" style="width: 520px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <h3 style="font-size: 16px; font-weight: bold; color: #ffffff;">📥 Importar Productos desde Excel</h3>
+      <button type="button" onclick="cerrarModalImportarExcel()" style="background: none; border: none; color: #9ca3af; font-size: 20px; cursor: pointer;">&times;</button>
+    </div>
+
+    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4;">
+      Sube un archivo de Excel (<code>.xlsx</code>) con tu lista de productos. Si el producto ya existe (por código o nombre), se actualizarán sus datos y se sumará o reemplazará su stock según tu preferencia.
+    </p>
+
+    <div style="background-color: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: #93c5fd;">
+      <div style="font-weight: bold; margin-bottom: 4px;">Columnas sugeridas en el Excel:</div>
+      <div>Código | Nombre | Categoría | Costo | Precio Venta | Stock | Unidad</div>
+      <div style="margin-top: 6px;">
+        <a href="/api/productos/descargar_plantilla_excel" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; font-size: 11px;">
+          📄 Descargar Plantilla de Ejemplo (.xlsx)
+        </a>
+      </div>
+    </div>
+
+    <form id="form-importar-excel" onsubmit="ejecutarImportacionExcel(event)">
+      <div class="form-group">
+        <label class="form-label" style="font-weight: bold;">Seleccionar archivo Excel (.xlsx):</label>
+        <input
+          type="file"
+          id="input-archivo-excel"
+          name="archivo"
+          accept=".xlsx"
+          class="form-control"
+          required
+          style="padding: 8px; background-color: var(--bg-input);"
+        >
+      </div>
+
+      <div class="form-group" style="margin-top: 10px;">
+        <label class="form-label" style="font-weight: bold;">Tratamiento del Stock existente:</label>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #e5e7eb; margin-top: 4px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="modo_stock" value="sumar" checked>
+            <span><strong>Sumar al stock existente</strong> (Recomendado para ingreso de mercadería)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="modo_stock" value="reemplazar">
+            <span><strong>Reemplazar stock actual</strong> (Fijar exactamente lo que dice el Excel)</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="importar-progreso" style="display: none; margin: 12px 0; padding: 10px; background-color: rgba(255, 255, 255, 0.05); border-radius: var(--radius-sm); font-size: 13px; color: #fbbf24; text-align: center;">
+        ⏳ Procesando archivo y actualizando inventario, por favor espera...
+      </div>
+
+      <div id="importar-resultado" style="display: none; margin: 12px 0; padding: 10px; border-radius: var(--radius-sm); font-size: 13px;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarModalImportarExcel()">Cerrar</button>
+        <button type="submit" id="btn-subir-excel" class="btn btn-success btn-sm">
+          🚀 Subir e Importar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+<div id="modal-categorias" class="modal-overlay" onclick="if(event.target === this) cerrarModalCategorias()">
+  <div class="card" style="width: 440px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <h3 style="font-size: 16px; font-weight: bold;">🏷 Gestión de Categorías</h3>
+      <button type="button" onclick="cerrarModalCategorias()" style="background: none; border: none; color: #9ca3af; font-size: 18px; cursor: pointer;">&times;</button>
+    </div>
+
+    <!-- Crear nueva -->
+    <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+      <input type="text" id="cat-nueva-nombre" class="form-control" placeholder="Nueva categoría...">
+      <button type="button" class="btn btn-primary btn-sm" onclick="crearNuevaCategoria()">Crear</button>
+    </div>
+
+    <div class="table-container" style="max-height: 220px;">
+      <div class="table-scroll">
+        <table class="ctk-table">
+          <thead>
+            <tr>
+              <th>Nombre de Categoría</th>
+              <th style="width: 80px;" class="text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cat in categorias %}
+            <tr>
+              <td><strong>{{ cat }}</strong></td>
+              <td class="text-center">
+                {% if cat != 'General' %}
+                <button type="button" class="btn btn-danger btn-sm" style="height: 24px; padding: 0 6px;" onclick="eliminarCategoria('{{ cat }}')">Borrar</button>
+                {% else %}
+                <span style="font-size: 11px; color: var(--text-dim);">Fija</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let productoSeleccionado = null;
+
+function seleccionarFilaProducto(tr) {
+  document.querySelectorAll("#tabla-productos tbody tr").forEach(r => r.classList.remove("selected"));
+  tr.classList.add("selected");
+  productoSeleccionado = JSON.parse(tr.dataset.json);
+
+  // Cargar en el formulario para edición
+  document.getElementById("form-titulo").textContent = "Editar Producto";
+  document.getElementById("prod-id").value = productoSeleccionado.id;
+  document.getElementById("prod-codigo").value = productoSeleccionado.codigo_barras || "";
+  document.getElementById("prod-nombre").value = productoSeleccionado.nombre || "";
+  document.getElementById("prod-categoria").value = productoSeleccionado.categoria || "General";
+  document.getElementById("prod-costo").value = productoSeleccionado.costo || 0;
+  document.getElementById("prod-precio").value = productoSeleccionado.precio_venta || 0;
+  document.getElementById("prod-unidad").value = productoSeleccionado.unidad || "unidad";
+  
+  document.getElementById("btn-cancelar-edicion").style.display = "inline-flex";
+  document.getElementById("btn-guardar-prod").textContent = "Guardar Cambios";
+}
+
+function cancelarEdicionProducto() {
+  limpiarFormularioProducto();
+}
+
+function limpiarFormularioProducto() {
+  productoSeleccionado = null;
+  document.querySelectorAll("#tabla-productos tbody tr").forEach(r => r.classList.remove("selected"));
+  document.getElementById("form-titulo").textContent = "Registrar Producto";
+  document.getElementById("prod-id").value = "";
+  document.getElementById("prod-codigo").value = "";
+  document.getElementById("prod-nombre").value = "";
+  document.getElementById("prod-costo").value = "0.00";
+  document.getElementById("prod-precio").value = "0.00";
+  document.getElementById("prod-stock").value = "0";
+  document.getElementById("btn-cancelar-edicion").style.display = "none";
+  document.getElementById("btn-guardar-prod").textContent = "Guardar Producto";
+}
+
+function generarCodigoBarrasAleatorio() {
+  const code = Math.floor(100000000000 + Math.random() * 900000000000);
+  document.getElementById("prod-codigo").value = code;
+}
+
+async function guardarProducto() {
+  const prodId = document.getElementById("prod-id").value;
+  const codigo = document.getElementById("prod-codigo").value.trim();
+  const nombre = document.getElementById("prod-nombre").value.trim();
+  const categoria = document.getElementById("prod-categoria").value;
+  const costo = parseFloat(document.getElementById("prod-costo").value) || 0;
+  const precio = parseFloat(document.getElementById("prod-precio").value) || 0;
+  const stock = parseInt(document.getElementById("prod-stock").value) || 0;
+  const unidad = document.getElementById("prod-unidad").value;
+
+  if (!codigo || !nombre) {
+    alert("Código y nombre son obligatorios.");
+    return;
+  }
+
+  const endpoint = prodId ? `/api/productos/editar/${prodId}` : `/api/productos/crear`;
+  const bodyData = {
+    codigo_barras: codigo,
+    nombre: nombre,
+    categoria: categoria,
+    costo: costo,
+    precio_venta: precio,
+    stock: stock,
+    unidad: unidad,
+  };
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bodyData),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      location.reload();
+    } else {
+      alert("Error: " + data.mensaje);
+    }
+  } catch {
+    alert("Error de conexión al guardar el producto.");
+  }
+}
+
+// Sumar stock
+function abrirModalSumarStock() {
+  if (!productoSeleccionado) {
+    alert("Selecciona un producto de la tabla primero.");
+    return;
+  }
+  document.getElementById("lbl-sumar-stock-prod").textContent = `Producto: ${productoSeleccionado.nombre} (Stock actual: ${productoSeleccionado.stock})`;
+  document.getElementById("modal-sumar-stock").classList.add("active");
+  document.getElementById("input-sumar-cant").focus();
+}
+
+function cerrarModalSumarStock() {
+  document.getElementById("modal-sumar-stock").classList.remove("active");
+}
+
+async function confirmarSumarStock() {
+  const cant = parseInt(document.getElementById("input-sumar-cant").value);
+  if (isNaN(cant) || cant <= 0) {
+    alert("Ingresa una cantidad mayor a 0.");
+    return;
+  }
+  const res = await fetch(`/api/productos/sumar_stock/${productoSeleccionado.id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cantidad: cant }),
+  });
+  const data = await res.json();
+  if (data.ok) location.reload();
+  else alert("Error: " + data.mensaje);
+}
+
+// Ajustar stock
+function abrirModalAjustarStock() {
+  if (!productoSeleccionado) {
+    alert("Selecciona un producto de la tabla primero.");
+    return;
+  }
+  document.getElementById("lbl-ajustar-stock-prod").textContent = `Producto: ${productoSeleccionado.nombre} (Stock actual: ${productoSeleccionado.stock})`;
+  document.getElementById("input-ajustar-cant").value = productoSeleccionado.stock;
+  document.getElementById("modal-ajustar-stock").classList.add("active");
+  document.getElementById("input-ajustar-cant").focus();
+}
+
+function cerrarModalAjustarStock() {
+  document.getElementById("modal-ajustar-stock").classList.remove("active");
+}
+
+async function confirmarAjustarStock() {
+  const cant = parseInt(document.getElementById("input-ajustar-cant").value);
+  if (isNaN(cant) || cant < 0) {
+    alert("Ingresa un stock válido (0 o mayor).");
+    return;
+  }
+  const res = await fetch(`/api/productos/ajustar_stock/${productoSeleccionado.id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stock: cant }),
+  });
+  const data = await res.json();
+  if (data.ok) location.reload();
+  else alert("Error: " + data.mensaje);
+}
+
+// Activar/Desactivar
+async function alternarEstadoProducto() {
+  if (!productoSeleccionado) {
+    alert("Selecciona un producto de la tabla primero.");
+    return;
+  }
+  const nuevoEstado = productoSeleccionado.activo ? 0 : 1;
+  const res = await fetch(`/api/productos/cambiar_estado/${productoSeleccionado.id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ activo: nuevoEstado }),
+  });
+  const data = await res.json();
+  if (data.ok) location.reload();
+  else alert("Error: " + data.mensaje);
+}
+
+// Eliminar
+async function eliminarProductoSeleccionado() {
+  if (!productoSeleccionado) {
+    alert("Selecciona un producto de la tabla primero.");
+    return;
+  }
+  if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente el producto «${productoSeleccionado.nombre}»?`)) {
+    return;
+  }
+  const res = await fetch(`/api/productos/eliminar/${productoSeleccionado.id}`, {
+    method: "POST",
+  });
+  const data = await res.json();
+  if (data.ok) location.reload();
+  else alert("Error: " + data.mensaje);
+}
+
+// Categorías
+function abrirModalCategorias() {
+  document.getElementById("modal-categorias").classList.add("active");
+}
+function cerrarModalCategorias() {
+  document.getElementById("modal-categorias").classList.remove("active");
+}
+async function crearNuevaCategoria() {
+  const nom = document.getElementById("cat-nueva-nombre").value.trim();
+  if (!nom) return;
+  const res = await fetch("/api/categorias/crear", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre: nom }),
+  });
+  const data = await res.json();
+  if (data.ok) location.reload();
+  else alert("Error: " + data.mensaje);
+}
+async function eliminarCategoria(nombre) {
+  if (!confirm(`¿Eliminar la categoría «${nombre}»? Los productos pasarán a «General».`)) return;
+  const res = await fetch("/api/categorias/eliminar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre: nombre }),
+  });
+  const data = await res.json();
+  if (data.ok) location.reload();
+  else alert("Error: " + data.mensaje);
+}
+
+// Modal Importar Productos desde Excel
+function abrirModalImportarExcel() {
+  document.getElementById("form-importar-excel").reset();
+  const resDiv = document.getElementById("importar-resultado");
+  resDiv.style.display = "none";
+  resDiv.innerHTML = "";
+  document.getElementById("importar-progreso").style.display = "none";
+  document.getElementById("btn-subir-excel").disabled = false;
+  document.getElementById("modal-importar-excel").classList.add("active");
+}
+
+function cerrarModalImportarExcel() {
+  document.getElementById("modal-importar-excel").classList.remove("active");
+}
+
+async function ejecutarImportacionExcel(event) {
+  event.preventDefault();
+  const fileInput = document.getElementById("input-archivo-excel");
+  if (!fileInput.files || fileInput.files.length === 0) {
+    alert("Por favor selecciona un archivo de Excel (.xlsx).");
+    return;
+  }
+
+  const file = fileInput.files[0];
+  if (!file.name.toLowerCase().endsWith(".xlsx")) {
+    alert("El formato debe ser Excel (.xlsx).");
+    return;
+  }
+
+  const modoStock = document.querySelector('input[name="modo_stock"]:checked')?.value || "sumar";
+  const formData = new FormData();
+  formData.append("archivo", file);
+  formData.append("modo_stock", modoStock);
+
+  const btnSubir = document.getElementById("btn-subir-excel");
+  const progreso = document.getElementById("importar-progreso");
+  const resDiv = document.getElementById("importar-resultado");
+
+  btnSubir.disabled = true;
+  progreso.style.display = "block";
+  resDiv.style.display = "none";
+
+  try {
+    const res = await fetch("/api/productos/importar_excel", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+
+    progreso.style.display = "none";
+    btnSubir.disabled = false;
+
+    if (data.ok) {
+      resDiv.style.display = "block";
+      resDiv.style.backgroundColor = "rgba(16, 185, 129, 0.15)";
+      resDiv.style.border = "1px solid #10b981";
+      resDiv.style.color = "#6ee7b7";
+      resDiv.innerHTML = `<strong>✅ Éxito:</strong> ${data.mensaje}<br><small style="color: #d1d5db;">La página se actualizará en unos segundos...</small>`;
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
+    } else {
+      resDiv.style.display = "block";
+      resDiv.style.backgroundColor = "rgba(239, 68, 68, 0.15)";
+      resDiv.style.border = "1px solid #ef4444";
+      resDiv.style.color = "#fca5a5";
+      resDiv.innerHTML = `<strong>❌ Error:</strong> ${data.mensaje}`;
+    }
+  } catch (err) {
+    progreso.style.display = "none";
+    btnSubir.disabled = false;
+    resDiv.style.display = "block";
+    resDiv.style.backgroundColor = "rgba(239, 68, 68, 0.15)";
+    resDiv.style.border = "1px solid #ef4444";
+    resDiv.style.color = "#fca5a5";
+    resDiv.innerHTML = `<strong>❌ Error de conexión:</strong> No se pudo subir el archivo. Revisa tu conexión.`;
+  }
+}
+
+// Búsqueda en vivo en la vista de Productos e Inventario
+(function() {
+  const inputFiltro = document.getElementById("input-filtro-productos");
+  const selectCat = document.getElementById("select-categoria-productos");
+  const tbodyProds = document.querySelector("#tabla-productos tbody");
+  if (!inputFiltro || !tbodyProds) return;
+
+  function filtrarTablaEnVivo() {
+    const q = inputFiltro.value.trim().toLowerCase();
+    const cat = selectCat ? selectCat.value : "Todas";
+    const filas = Array.from(tbodyProds.querySelectorAll("tr[data-id]"));
+    if (filas.length === 0) return;
+
+    let coincidencias = [];
+
+    filas.forEach(tr => {
+      let prod = null;
+      try {
+        prod = JSON.parse(tr.dataset.json);
+      } catch (e) {}
+
+      const nombre = (prod && prod.nombre ? prod.nombre : (tr.children[1]?.textContent || "")).toLowerCase();
+      const codigo = (prod && prod.codigo_barras ? prod.codigo_barras : (tr.children[0]?.textContent || "")).toLowerCase();
+      const categoria = (prod && prod.categoria ? prod.categoria : (tr.children[2]?.textContent || "")).toLowerCase();
+
+      // Filtro de categoría
+      const coincideCat = (cat === "Todas" || categoria === cat.toLowerCase());
+      if (!coincideCat) {
+        tr.style.display = "none";
+        return;
+      }
+
+      if (!q) {
+        tr.style.display = "";
+        coincidencias.push({ tr, prioridad: 1, nombre });
+        return;
+      }
+
+      // Priorización de búsqueda:
+      // 1: Comienza exactamente con las letras buscadas (ej: "tor" -> "Tornillo...")
+      // 2: Alguna palabra del nombre comienza con esas letras (ej: "Phillips" en "Destornillador Phillips")
+      // 3: El código de barras comienza con las letras/números
+      // 4: Contiene las letras en cualquier parte del nombre
+      // 5: Contiene en código o categoría
+      let prioridad = 999;
+      if (nombre.startsWith(q)) {
+        prioridad = 1;
+      } else {
+        const palabras = nombre.split(/\s+/);
+        if (palabras.some(pal => pal.startsWith(q))) {
+          prioridad = 2;
+        } else if (codigo.startsWith(q)) {
+          prioridad = 3;
+        } else if (nombre.includes(q)) {
+          prioridad = 4;
+        } else if (codigo.includes(q) || categoria.includes(q)) {
+          prioridad = 5;
+        }
+      }
+
+      if (prioridad <= 5) {
+        tr.style.display = "";
+        coincidencias.push({ tr, prioridad, nombre });
+      } else {
+        tr.style.display = "none";
+      }
+    });
+
+    // Ordenar las filas visibles en la tabla colocando primero los que comienzan con esas letras
+    if (q) {
+      coincidencias.sort((a, b) => {
+        if (a.prioridad !== b.prioridad) return a.prioridad - b.prioridad;
+        return a.nombre.localeCompare(b.nombre);
+      });
+      coincidencias.forEach(item => {
+        tbodyProds.appendChild(item.tr);
+      });
+    }
+
+    // Fila de "no encontrado"
+    let filaVacia = document.getElementById("fila-sin-resultados-prods");
+    if (coincidencias.length === 0) {
+      if (!filaVacia) {
+        filaVacia = document.createElement("tr");
+        filaVacia.id = "fila-sin-resultados-prods";
+        filaVacia.innerHTML = `<td colspan="7" style="text-align: center; color: var(--text-dim); padding: 20px;">No se encontraron productos coincidentes.</td>`;
+        tbodyProds.appendChild(filaVacia);
+      }
+      filaVacia.style.display = "";
+    } else if (filaVacia) {
+      filaVacia.style.display = "none";
+    }
+  }
+
+  inputFiltro.addEventListener("input", filtrarTablaEnVivo);
+})();
+
+// Navegar las filas de productos con las flechas arriba/abajo.
+(function() {
+  const tabla = document.getElementById("tabla-productos");
+  const tbody = tabla?.querySelector("tbody");
+  if (!tabla || !tbody) return;
+
+  // La navegación se maneja en el cuerpo de la tabla, donde están las filas.
+  tbody.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    if (event.target.closest("input, select, textarea, button")) return;
+
+    const filas = Array.from(tabla.querySelectorAll("tbody tr[data-id]"))
+      .filter(fila => fila.getClientRects().length > 0);
+    if (filas.length === 0) return;
+
+    const actual = filas.indexOf(tabla.querySelector("tbody tr.selected"));
+    const siguiente = actual < 0
+      ? 0
+      : Math.max(0, Math.min(filas.length - 1, actual + (event.key === "ArrowDown" ? 1 : -1)));
+
+    event.preventDefault();
+    seleccionarFilaProducto(filas[siguiente]);
+    filas[siguiente].focus();
+    filas[siguiente].scrollIntoView({ block: "nearest" });
+  });
+})();
+</script>
+{% endblock %}

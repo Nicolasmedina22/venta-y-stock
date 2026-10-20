@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-bottom: 24px;">
+
+  <!-- ENCABEZADO Y BARRA DE BÚSQUEDA -->
+  <div class="card" style="padding: 16px 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+      <div>
+        <div class="view-title" style="margin-bottom: 4px;">📅 Historial de caja</div>
+        <div style="font-size: 13px; color: var(--text-muted);">
+          Consulta el resumen completo y cierres de cualquier día
+        </div>
+      </div>
+
+      <!-- FORMULARIO: CALENDARIO Y BOTÓN BUSCAR -->
+      <form method="GET" action="{{ url_for('historial_caja') }}" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <label for="fecha-historial" style="font-size: 13px; font-weight: bold; color: #d1d5db;">
+          Fecha:
+        </label>
+        <input 
+          type="date" 
+          id="fecha-historial" 
+          name="fecha" 
+          value="{{ fecha_seleccionada }}" 
+          class="form-control" 
+          style="width: 165px; height: 38px; color-scheme: dark; font-weight: 500;"
+          required
+        >
+        <button type="submit" class="btn btn-primary" style="height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 16px;">
+          🔍 Buscar
+        </button>
+
+        <!-- Navegación Rápida -->
+        <div style="display: inline-flex; gap: 4px; margin-left: 6px;">
+          <a href="{{ url_for('historial_caja', fecha=fecha_anterior) }}" class="btn btn-secondary" style="height: 38px; padding: 0 12px; display: inline-flex; align-items: center;" title="Día anterior">
+            ◀
+          </a>
+          <a href="{{ url_for('historial_caja', fecha=hoy_iso) }}" class="btn btn-secondary" style="height: 38px; padding: 0 12px; display: inline-flex; align-items: center; font-size: 12px; font-weight: bold; {% if fecha_seleccionada == hoy_iso %}background-color: var(--btn-blue); color: #fff;{% endif %}" title="Ir a hoy">
+            Hoy
+          </a>
+          <a href="{{ url_for('historial_caja', fecha=fecha_siguiente) }}" class="btn btn-secondary" style="height: 38px; padding: 0 12px; display: inline-flex; align-items: center;" title="Día siguiente">
+            ▶
+          </a>
+        </div>
+      </form>
+    </div>
+
+    <!-- Indicador de Fecha Consultada -->
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 15px; font-weight: bold; color: #f3f4f6;">
+          Resumen del día: {{ fecha_larga }}
+        </span>
+        <span style="font-size: 13px; color: var(--text-muted); font-family: monospace;">
+          ({{ fecha_corta }})
+        </span>
+        {% if fecha_seleccionada == hoy_iso %}
+        <span style="background-color: rgba(37, 99, 235, 0.2); color: #93c5fd; border: 1px solid #2563eb; font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: bold;">
+          Día actual
+        </span>
+        {% endif %}
+      </div>
+
+
+    </div>
+  </div>
+
+  <!-- AVISO CUANDO NO HAY MOVIMIENTOS -->
+  {% if (resumen.cantidad_ventas or 0) == 0 and (resumen.total_general or 0) == 0 %}
+  <div style="background-color: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: var(--radius-md); padding: 12px 16px; color: #93c5fd; font-size: 13px; display: flex; align-items: center; gap: 10px;">
+    <span>ℹ️</span>
+    <span>No se registraron ventas ni movimientos de caja para la fecha seleccionada (<strong>{{ fecha_corta }}</strong>).</span>
+  </div>
+  {% endif %}
+
+  <!-- 12 TARJETAS DEL RESUMEN DE CAJA -->
+  <div class="caja-grid">
+    <div class="card-caja bg-caja-efectivo">
+      <div class="card-caja-title">Ventas efectivo</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.efectivo or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-tarjeta">
+      <div class="card-caja-title">Ventas por transferencia</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.tarjeta or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-fiado">
+      <div class="card-caja-title">Fiado</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.fiado or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-otros-ing-efectivo">
+      <div class="card-caja-title">Otros ingresos efectivo</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.otros_ingresos_efectivo or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-otros-ing-tarjeta">
+      <div class="card-caja-title">Otros ingresos por transferencia</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.otros_ingresos_tarjeta or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-otros-egr-efectivo">
+      <div class="card-caja-title">Otros egresos efectivo</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.otros_egresos_efectivo or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-otros-egr-tarjeta">
+      <div class="card-caja-title">Otros egresos por transferencia</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.otros_egresos_tarjeta or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-abonos-efectivo">
+      <div class="card-caja-title">Abonos efectivo</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.abonos_efectivo or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-abonos-tarjeta">
+      <div class="card-caja-title">Abonos por transferencia</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.abonos_tarjeta or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-efectivo-final">
+      <div class="card-caja-title">Efectivo final</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.efectivo_final or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-tarjeta-final">
+      <div class="card-caja-title">Transferencia final</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.tarjeta_final or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-total-general">
+      <div class="card-caja-title">Total general</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.total_general or 0) }}</div>
+    </div>
+  </div>
+
+  <div style="font-size: 13px; color: #9ca3af;">
+    {{ resumen.cantidad_ventas or 0 }} venta{{ 's' if (resumen.cantidad_ventas or 0) != 1 else '' }} registrada{{ 's' if (resumen.cantidad_ventas or 0) != 1 else '' }} en esta fecha
+  </div>
+
+  <!-- CIERRE NETO -->
+  <div class="cierre-neto-card">
+    <div>
+      <div style="font-size: 14px; font-weight: bold; color: #f3f4f6; margin-bottom: 4px;">Cierre neto</div>
+      <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+        <span style="font-size: 14px; font-weight: bold; color: #4ade80;">
+          Efectivo: ${{ "{:,.2f}".format(resumen.efectivo_final or 0) }}
+        </span>
+        <span style="font-size: 14px; font-weight: bold; color: #60a5fa;">
+          Transferencia: ${{ "{:,.2f}".format(resumen.tarjeta_final or 0) }}
+        </span>
+        <span style="font-size: 14px; font-weight: bold; color: #c084fc;">
+          Total en caja: ${{ "{:,.2f}".format((resumen.efectivo_final or 0) + (resumen.tarjeta_final or 0)) }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+
+</div>
+{% endblock %}

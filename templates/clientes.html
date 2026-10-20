@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; height: 100%;">
+  <!-- Cabecera -->
+  <div class="view-header">
+    <div class="view-title">👥 Clientes y Cuentas por Cobrar (Fiado)</div>
+  </div>
+
+  <div class="clientes-layout">
+    <!-- PANEL IZQUIERDO: Buscador y Tabla -->
+    <div class="card" style="display: flex; flex-direction: column; padding: 12px 14px; min-height: 0;">
+      <!-- Buscador -->
+      <form method="GET" action="{{ url_for('clientes') }}" style="display: flex; gap: 6px; margin-bottom: 10px;">
+        <input 
+          type="text" 
+          name="q" 
+          value="{{ busqueda_actual }}" 
+          class="form-control" 
+          placeholder="🔍 Buscar cliente por nombre, teléfono o dirección..." 
+          style="flex: 1;"
+        >
+        <button type="submit" class="btn btn-secondary">Buscar</button>
+        {% if busqueda_actual %}
+        <a href="{{ url_for('clientes') }}" class="btn btn-outline">Limpiar</a>
+        {% endif %}
+      </form>
+
+      <!-- Tabla de Clientes -->
+      <div class="table-container" style="flex: 1; min-height: 200px;">
+        <div class="table-scroll">
+          <table class="ctk-table" id="tabla-clientes">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th style="width: 110px;">Teléfono</th>
+                <th>Dirección</th>
+                <th style="width: 95px;" class="text-right">Límite</th>
+                <th style="width: 100px;" class="text-right">Saldo Deuda</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in clientes %}
+              <tr 
+                data-id="{{ c.id }}" 
+                data-json='{{ c|tojson }}' 
+                onclick="seleccionarFilaCliente(this)"
+              >
+                <td><strong>{{ c.nombre }}</strong></td>
+                <td>{{ c.telefono or '-' }}</td>
+                <td>{{ c.direccion or '-' }}</td>
+                <td class="text-right">${{ "{:,.2f}".format(c.limite_credito or 0) }}</td>
+                <td class="text-right" style="font-weight: bold; {% if c.saldo_deuda > 0 %}color: #f87171;{% else %}color: #4ade80;{% endif %}">
+                  ${{ "{:,.2f}".format(c.saldo_deuda or 0) }}
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                  No hay clientes registrados que coincidan con la búsqueda.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Acciones de cliente -->
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <button type="button" class="btn btn-success btn-sm" onclick="abrirModalAbono()">💵 Registrar Abono de Deuda</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarClienteSeleccionado()">🗑 Eliminar Cliente</button>
+      </div>
+    </div>
+
+    <!-- PANEL DERECHO: Formulario de Registro / Edición -->
+    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div id="form-cliente-titulo" style="font-size: 16px; font-weight: bold; margin-bottom: 12px; color: #ffffff;">
+          Nuevo Cliente
+        </div>
+
+        <input type="hidden" id="cli-id" value="">
+
+        <div class="form-group">
+          <label class="form-label">Nombre Completo:</label>
+          <input type="text" id="cli-nombre" class="form-control" placeholder="Ej: Juan Pérez" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Teléfono:</label>
+          <input type="text" id="cli-telefono" class="form-control" placeholder="Ej: 381-1234567">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Dirección / Localidad:</label>
+          <input type="text" id="cli-direccion" class="form-control" placeholder="Ej: Av. San Martín 450">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Límite de Crédito ($):</label>
+          <input type="number" step="0.01" id="cli-limite" class="form-control" placeholder="0.00" value="0.00">
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 14px;">
+        <button type="button" id="btn-guardar-cliente" class="btn btn-primary" onclick="guardarCliente()">
+          Guardar Cliente
+        </button>
+        <button type="button" id="btn-cancelar-cliente" class="btn btn-secondary btn-sm" style="display: none;" onclick="cancelarEdicionCliente()">
+          Cancelar edición
+        </button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="limpiarFormularioCliente()">
+          Limpiar formulario
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     MODAL: REGISTRAR ABONO DE DEUDA
+     =================================================================== -->
+<div id="modal-abono" class="modal-overlay" onclick="if(event.target === this) cerrarModalAbono()">
+  <div class="card" style="width: 360px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <h3 style="font-size: 16px; font-weight: bold;">💵 Registrar Abono a Cuenta</h3>
+      <button type="button" onclick="cerrarModalAbono()" style="background: none; border: none; color: #9ca3af; font-size: 18px; cursor: pointer;">&times;</button>
+    </div>
+
+    <div id="lbl-abono-cliente" style="font-size: 13px; font-weight: bold; color: #ffffff; margin-bottom: 4px;"></div>
+    <div id="lbl-abono-deuda" style="font-size: 13px; color: #f87171; margin-bottom: 12px;"></div>
+
+    <div class="form-group">
+      <label class="form-label">Monto del Abono ($):</label>
+      <input type="number" step="0.01" id="abono-monto" class="form-control" placeholder="0.00">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Forma de Pago:</label>
+      <select id="abono-forma-pago" class="form-control">
+        <option value="efectivo">💵 Efectivo</option>
+        <option value="tarjeta">🔁 Transferencia</option>
+      </select>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 14px;">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarModalAbono()">Cancelar</button>
+      <button type="button" class="btn btn-success btn-sm" onclick="confirmarAbono()">Confirmar Abono</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let clienteSeleccionado = null;
+
+function seleccionarFilaCliente(tr) {
+  document.querySelectorAll("#tabla-clientes tbody tr").forEach(r => r.classList.remove("selected"));
+  tr.classList.add("selected");
+  clienteSeleccionado = JSON.parse(tr.dataset.json);
+
+  // Cargar en formulario
+  document.getElementById("form-cliente-titulo").textContent = "Editar Cliente";
+  document.getElementById("cli-id").value = clienteSeleccionado.id;
+  document.getElementById("cli-nombre").value = clienteSeleccionado.nombre || "";
+  document.getElementById("cli-telefono").value = clienteSeleccionado.telefono || "";
+  document.getElementById("cli-direccion").value = clienteSeleccionado.direccion || "";
+  document.getElementById("cli-limite").value = clienteSeleccionado.limite_credito || 0;
+
+  document.getElementById("btn-cancelar-cliente").style.display = "inline-flex";
+  document.getElementById("btn-guardar-cliente").textContent = "Guardar Cambios";
+}
+
+function cancelarEdicionCliente() {
+  limpiarFormularioCliente();
+}
+
+function limpiarFormularioCliente() {
+  clienteSeleccionado = null;
+  document.querySelectorAll("#tabla-clientes tbody tr").forEach(r => r.classList.remove("selected"));
+  document.getElementById("form-cliente-titulo").textContent = "Nuevo Cliente";
+  document.getElementById("cli-id").value = "";
+  document.getElementById("cli-nombre").value = "";
+  document.getElementById("cli-telefono").value = "";
+  document.getElementById("cli-direccion").value = "";
+  document.getElementById("cli-limite").value = "0.00";
+  document.getElementById("btn-cancelar-cliente").style.display = "none";
+  document.getElementById("btn-guardar-cliente").textContent = "Guardar Cliente";
+}
+
+async function guardarCliente() {
+  const cliId = document.getElementById("cli-id").value;
+  const nombre = document.getElementById("cli-nombre").value.trim();
+  const telefono = document.getElementById("cli-telefono").value.trim();
+  const direccion = document.getElementById("cli-direccion").value.trim();
+  const limite = parseFloat(document.getElementById("cli-limite").value) || 0;
+
+  if (!nombre) {
+    alert("El nombre completo del cliente es obligatorio.");
+    return;
+  }
+
+  const endpoint = cliId ? `/api/clientes/editar/${cliId}` : `/api/clientes/crear`;
+  const bodyData = {
+    nombre: nombre,
+    telefono: telefono,
+    direccion: direccion,
+    limite_credito: limite,
+  };
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bodyData),
+    });
+    const data = await res.json();
+    if (data.ok) location.reload();
+    else alert("Error: " + data.mensaje);
+  } catch {
+    alert("Error de conexión al guardar cliente.");
+  }
+}
+
+async function eliminarClienteSeleccionado() {
+  if (!clienteSeleccionado) {
+    alert("Selecciona un cliente de la tabla primero.");
+    return;
+  }
+  if (!confirm(`¿Eliminar al cliente «${clienteSeleccionado.nombre}»?`)) return;
+
+  const res = await fetch(`/api/clientes/eliminar/${clienteSeleccionado.id}`, {
+    method: "POST",
+  });
+  const data = await res.json();
+  if (data.ok) location.reload();
+  else alert("Error: " + data.mensaje);
+}
+
+function abrirModalAbono() {
+  if (!clienteSeleccionado) {
+    alert("Selecciona un cliente de la tabla primero.");
+    return;
+  }
+  const saldo = clienteSeleccionado.saldo_deuda || 0;
+  if (saldo <= 0) {
+    alert(`El cliente «${clienteSeleccionado.nombre}» no tiene deuda pendiente.`);
+    return;
+  }
+  document.getElementById("lbl-abono-cliente").textContent = `Cliente: ${clienteSeleccionado.nombre}`;
+  document.getElementById("lbl-abono-deuda").textContent = `Deuda pendiente: $${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  document.getElementById("abono-monto").value = saldo;
+  document.getElementById("modal-abono").classList.add("active");
+  document.getElementById("abono-monto").focus();
+}
+
+function cerrarModalAbono() {
+  document.getElementById("modal-abono").classList.remove("active");
+}
+
+async function confirmarAbono() {
+  const monto = parseFloat(document.getElementById("abono-monto").value);
+  const formaPago = document.getElementById("abono-forma-pago").value;
+
+  if (isNaN(monto) || monto <= 0) {
+    alert("Ingresa un monto válido mayor a 0.");
+    return;
+  }
+
+  const res = await fetch("/api/clientes/abono", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      cliente_id: clienteSeleccionado.id,
+      monto: monto,
+      forma_pago: formaPago,
+    }),
+  });
+  const data = await res.json();
+  if (data.ok) location.reload();
+  else alert("Error: " + data.mensaje);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; height: 100%;">
+  <div class="view-header">
+    <div class="view-title">Reportes del día (solo administrador)</div>
+    <div style="font-size: 13px; color: var(--text-muted);">📅 {{ hoy_str }}</div>
+  </div>
+
+  <!-- Tarjetas Resumen -->
+  <div class="reportes-cards">
+    <!-- Producto más vendido -->
+    <div class="card" style="padding: 16px 20px;">
+      <div style="font-size: 14px; font-weight: bold; color: #ffffff; margin-bottom: 6px;">
+        ⭐ Producto más vendido hoy
+      </div>
+      <div style="font-size: 18px; font-weight: bold; color: #38bdf8;">
+        {% if top_producto %}
+          {{ top_producto.nombre }} ({{ top_producto.total_unidades }} unidades)
+        {% else %}
+          Sin ventas todavía
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Ventas totales hoy -->
+    <div class="card" style="padding: 16px 20px;">
+      <div style="font-size: 14px; font-weight: bold; color: #ffffff; margin-bottom: 6px;">
+        💰 Ventas totales hoy
+      </div>
+      <div style="font-size: 26px; font-weight: bold; color: #10b981;">
+        ${{ "{:,.2f}".format(total_dia or 0) }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Tablas de Reportes -->
+  <div class="reportes-tables">
+    <!-- Top 5 Productos -->
+    <div class="card" style="display: flex; flex-direction: column; padding: 14px 16px; min-height: 0;">
+      <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #ffffff;">
+        Top 5 productos del día
+      </div>
+
+      <div class="table-container" style="flex: 1; min-height: 200px;">
+        <div class="table-scroll">
+          <table class="ctk-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th style="width: 80px;" class="text-center">Unidades</th>
+                <th style="width: 110px;" class="text-right">Total vendido</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in top5 %}
+              <tr>
+                <td><strong>{{ p.nombre }}</strong></td>
+                <td class="text-center">{{ p.total_unidades }}</td>
+                <td class="text-right" style="color: #4ade80; font-weight: bold;">
+                  ${{ "{:,.2f}".format(p.total_recaudado or 0) }}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" style="text-align: center; color: var(--text-dim); padding: 20px;">Sin ventas registradas hoy.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Clientes con deuda pendiente -->
+    <div class="card" style="display: flex; flex-direction: column; padding: 14px 16px; min-height: 0;">
+      <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #ffffff;">
+        Clientes con deuda pendiente
+      </div>
+
+      <div class="table-container" style="flex: 1; min-height: 200px;">
+        <div class="table-scroll">
+          <table class="ctk-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th style="width: 120px;" class="text-right">Saldo Deuda</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in clientes_deuda %}
+              <tr>
+                <td><strong>{{ c.nombre }}</strong></td>
+                <td class="text-right" style="color: #f87171; font-weight: bold;">
+                  ${{ "{:,.2f}".format(c.saldo_deuda or 0) }}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="2" style="text-align: center; color: var(--text-dim); padding: 20px;">No hay clientes con deuda activa.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

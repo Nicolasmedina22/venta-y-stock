@@ -1,0 +1,12 @@
+# Dependencias de DESARROLLO y pruebas (no se instalan en el hosting).
+# Se instalan con: pip install -r requirements-dev.txt
+#
+# El hosting solo necesita requirements.txt.
+
+-r requirements.txt
+
+# Pruebas automaticas
+pytest==8.3.3
+
+# Empaquetado del ejecutable (.exe)
+pyinstaller>=6.10,<7

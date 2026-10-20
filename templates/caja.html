@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 14px; overflow-y: auto;">
+  <div class="view-header" style="margin-bottom: 6px;">
+    <div>
+      <div class="view-title">Cierre de caja — {{ hoy_str }}</div>
+      <div style="font-size: 14px; font-weight: bold; color: #d1d5db; margin-top: 4px;">Resumen del día</div>
+    </div>
+  </div>
+
+  <!-- Las 12 tarjetas de colores exactos -->
+  <div class="caja-grid">
+    <div class="card-caja bg-caja-efectivo">
+      <div class="card-caja-title">Ventas efectivo</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.efectivo or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-tarjeta">
+      <div class="card-caja-title">Ventas por transferencia</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.tarjeta or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-fiado">
+      <div class="card-caja-title">Fiado</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.fiado or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-otros-ing-efectivo">
+      <div class="card-caja-title">Otros ingresos efectivo</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.otros_ingresos_efectivo or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-otros-ing-tarjeta">
+      <div class="card-caja-title">Otros ingresos por transferencia</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.otros_ingresos_tarjeta or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-otros-egr-efectivo">
+      <div class="card-caja-title">Otros egresos efectivo</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.otros_egresos_efectivo or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-otros-egr-tarjeta">
+      <div class="card-caja-title">Otros egresos por transferencia</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.otros_egresos_tarjeta or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-abonos-efectivo">
+      <div class="card-caja-title">Abonos efectivo</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.abonos_efectivo or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-abonos-tarjeta">
+      <div class="card-caja-title">Abonos por transferencia</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.abonos_tarjeta or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-efectivo-final">
+      <div class="card-caja-title">Efectivo final</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.efectivo_final or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-tarjeta-final">
+      <div class="card-caja-title">Transferencia final</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.tarjeta_final or 0) }}</div>
+    </div>
+
+    <div class="card-caja bg-caja-total-general">
+      <div class="card-caja-title">Total general</div>
+      <div class="card-caja-value">${{ "{:,.2f}".format(resumen.total_general or 0) }}</div>
+    </div>
+  </div>
+
+  <div style="font-size: 13px; color: #9ca3af;">
+    {{ resumen.cantidad_ventas or 0 }} venta{{ 's' if (resumen.cantidad_ventas or 0) != 1 else '' }} registrada{{ 's' if (resumen.cantidad_ventas or 0) != 1 else '' }} hoy
+  </div>
+
+  <!-- Cierre Neto -->
+  <div class="cierre-neto-card">
+    <div>
+      <div style="font-size: 14px; font-weight: bold; color: #f3f4f6; margin-bottom: 4px;">Cierre neto</div>
+      <div style="display: flex; gap: 24px;">
+        <span style="font-size: 14px; font-weight: bold; color: #4ade80;">
+          Efectivo: ${{ "{:,.2f}".format(resumen.efectivo_final or 0) }}
+        </span>
+        <span style="font-size: 14px; font-weight: bold; color: #60a5fa;">
+          Transferencia: ${{ "{:,.2f}".format(resumen.tarjeta_final or 0) }}
+        </span>
+        <span style="font-size: 14px; font-weight: bold; color: #c084fc;">
+          Total en caja hoy: ${{ "{:,.2f}".format((resumen.efectivo_final or 0) + (resumen.tarjeta_final or 0)) }}
+        </span>
+      </div>
+    </div>
+
+    <button type="button" class="btn btn-primary" onclick="guardarCierreCaja()">
+      🔒 Cerrar Caja y Guardar Registro
+    </button>
+  </div>
+</div>
+
+<script>
+async function guardarCierreCaja() {
+  if (!confirm("¿Deseas formalizar el cierre de caja de hoy y guardarlo en el historial?")) return;
+  try {
+    const res = await fetch("/api/caja/cerrar", { method: "POST" });
+    const data = await res.json();
+    if (data.ok) {
+      alert(data.mensaje);
+      location.reload();
+    } else {
+      alert("Error: " + data.mensaje);
+    }
+  } catch {
+    alert("Error de conexión al cerrar caja.");
+  }
+}
+</script>
+{% endblock %}

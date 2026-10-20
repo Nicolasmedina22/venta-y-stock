@@ -1,0 +1,40 @@
+# Blueprint de Render (render.com). Despliegue en un clic desde el repositorio.
+#
+#   1. Sube el proyecto a GitHub (la base de datos y build/ NO se suben, lo
+#      encarga .gitignore).
+#   2. En Render: New -> Blueprint -> apunta a tu repositorio.
+#   3. Render te pedira ADMIN_USERNAME y ADMIN_PASSWORD: inventalos.
+#
+# Ojo: el plan "free" de PostgreSQL en Render caduca a los 30 dias. Para un
+# negocio en produccion usa un plan de pago o una base gratuita permanente
+# como Neon (ver DEPLOY.md).
+
+services:
+  - type: web
+    name: venta-y-stock
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python serve.py
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: HOSTED_MODE
+        value: "1"
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: venta-y-stock-db
+          property: connectionString
+
+databases:
+  - name: venta-y-stock-db
+    plan: free
+    postgresMajorVersion: "16"
