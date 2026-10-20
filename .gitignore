@@ -50,3 +50,6 @@ desktop.ini
 # Artefactos de desarrollo (no forman parte de la app)
 server_rendered.html
 qa_login.mjs
+
+# Connection string de Neon generada en local
+neon_database_url.txt

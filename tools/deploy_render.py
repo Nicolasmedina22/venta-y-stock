@@ -239,9 +239,15 @@ def main():
               + (f" ({repo})" if repo else " (indica GITHUB_REPO para crearlo)"))
 
     print("\n[3/6] Preparando PostgreSQL...")
-    pg_id = obtener_o_crear_postgres(token, owner_id)
-    connection_string = obtener_connection_string(token, pg_id)
-    print(f"  connection-string listo")
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if database_url:
+        # La base ya existe (por ejemplo en Neon): no creamos nada.
+        print(f"  usando la base externa indicada en DATABASE_URL")
+        print(f"  host: {database_url.split('@')[-1].split('/')[0]}")
+    else:
+        pg_id = obtener_o_crear_postgres(token, owner_id)
+        database_url = obtener_connection_string(token, pg_id)
+        print(f"  connection-string listo")
 
     print("\n[4/6] Creando el servicio web...")
     vars_env = {
@@ -250,7 +256,7 @@ def main():
         "ADMIN_USERNAME": admin_user,
         "ADMIN_PASSWORD": admin_pass,
         "SESSION_COOKIE_SECURE": "1",
-        "DATABASE_URL": connection_string,
+        "DATABASE_URL": database_url,
     }
     service_id, servicio = obtener_o_crear_servicio(token, owner_id, repo or "USUARIO/REPO", vars_env)
 
