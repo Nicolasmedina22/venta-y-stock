@@ -53,3 +53,6 @@ qa_login.mjs
 
 # Connection string de Neon generada en local
 neon_database_url.txt
+
+# Credenciales del despliegue local
+credenciales_locales.txt
