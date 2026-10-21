@@ -176,12 +176,17 @@
             </select>
           </div>
         </div>
+
+        <!-- El boton Guardar queda justo debajo de Stock y Unidad de Medida:
+             asi se guarda sin tener que bajar hasta el final del panel. -->
+        <div style="margin-top: 4px;">
+          <button type="button" id="btn-guardar-prod" class="btn btn-primary" onclick="guardarProducto()">
+            Guardar Producto
+          </button>
+        </div>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 14px;">
-        <button type="button" id="btn-guardar-prod" class="btn btn-primary" onclick="guardarProducto()">
-          Guardar Producto
-        </button>
         <button type="button" id="btn-cancelar-edicion" class="btn btn-secondary btn-sm" style="display: none;" onclick="cancelarEdicionProducto()">
           Cancelar edición
         </button>
