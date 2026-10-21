@@ -693,12 +693,34 @@ def obtener_producto(producto_id: int):
         return cur.fetchone()
 
 
+def _sincronizar_activo_por_stock(cur, producto_id: int):
+    """
+    Regla de negocio: un producto solo queda ACTIVO si tiene stock.
+
+    Si el stock llega a 0 el producto se da de baja (deja de aparecer en el
+    punto de venta). Si vuelve a tener stock, se reactiva solo.
+
+    Se aplica en todas las vías que mueven stock: ajuste, suma, descuento por
+    venta, edicion e importacion desde Excel.
+    """
+    cur.execute(
+        "UPDATE productos "
+        "SET activo = CASE WHEN COALESCE(stock, 0) > 0 THEN 1 ELSE 0 END "
+        "WHERE id = ?",
+        (producto_id,),
+    )
+
+
 def crear_producto(codigo_barras: str, nombre: str, categoria: str,
                    precio_venta: float, costo: float, stock: int,
                    unidad: str = "unidad", activo: int = 1) -> int:
     with cursor_db() as cur:
         if categoria and categoria.strip():
             cur.execute("INSERT OR IGNORE INTO categorias (nombre) VALUES (?)", (categoria.strip(),))
+
+        # Regla: solo queda activo si tiene stock.
+        if int(stock) <= 0:
+            activo = 0
 
         consulta = """INSERT INTO productos
                (codigo_barras, nombre, categoria, precio_venta, costo, stock, unidad, activo)
@@ -731,6 +753,8 @@ def actualizar_producto(producto_id: int, codigo_barras: str, nombre: str,
              float(precio_venta), float(costo), int(stock), unidad.strip(),
              int(activo), producto_id),
         )
+        # La regla manda: el estado se deduce del stock.
+        _sincronizar_activo_por_stock(cur, producto_id)
 
 
 def cambiar_estado_producto(producto_id: int, activo: bool):
@@ -766,6 +790,7 @@ def ajustar_stock_producto(producto_id: int, nuevo_stock: int):
             "UPDATE productos SET stock = ? WHERE id = ?",
             (int(nuevo_stock), producto_id),
         )
+        _sincronizar_activo_por_stock(cur, producto_id)
 
 
 def sumar_stock_producto(producto_id: int, cantidad: int):
@@ -774,6 +799,7 @@ def sumar_stock_producto(producto_id: int, cantidad: int):
             "UPDATE productos SET stock = stock + ? WHERE id = ?",
             (int(cantidad), producto_id),
         )
+        _sincronizar_activo_por_stock(cur, producto_id)
 
 
 def importar_o_actualizar_producto_desde_excel(
@@ -835,20 +861,25 @@ def importar_o_actualizar_producto_desde_excel(
                    WHERE id = ?""",
                 (codigo_final, nombre_final, cat_final, precio_final, costo_final, nuevo_stock, unidad_final, prod_id),
             )
+            # Regla: un producto con stock vuelve a estar activo; sin stock, no.
+            _sincronizar_activo_por_stock(cur, prod_id)
             return "actualizado", prod_id
         else:
             if not codigo_limpio:
                 import random
                 codigo_limpio = str(random.randint(100000000000, 999999999999))
 
+            # Regla: un producto recien importado sin stock queda inactivo.
+            activo_importado = 1 if stock_val > 0 else 0
             consulta = """INSERT INTO productos
                    (codigo_barras, nombre, categoria, precio_venta, costo, stock, unidad, activo)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 1)"""
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
             if DATABASE_URL:
                 consulta += " RETURNING id"
             cur.execute(
                 consulta,
-                (codigo_limpio, nombre_limpio, categoria_limpia, precio_val, costo_val, stock_val, unidad_limpia),
+                (codigo_limpio, nombre_limpio, categoria_limpia, precio_val, costo_val,
+                 stock_val, unidad_limpia, activo_importado),
             )
             if DATABASE_URL:
                 nuevo_id = cur.fetchone()["id"]
@@ -1006,6 +1037,7 @@ def descontar_stock(producto_id: int, cantidad: int):
             "UPDATE productos SET stock = stock - ? WHERE id = ?",
             (cantidad, producto_id),
         )
+        _sincronizar_activo_por_stock(cur, producto_id)
 
 
 # ---------------------------------------------------------------------
@@ -1216,6 +1248,8 @@ def registrar_venta(usuario_id: int, cliente_id, carrito: list, forma_pago: str)
                     "UPDATE productos SET stock = stock - ? WHERE id = ?",
                     (item["cantidad"], producto_id),
                 )
+                # Si la venta dejo el stock en 0, el producto se da de baja.
+                _sincronizar_activo_por_stock(cur, producto_id)
 
         if forma_pago == "fiado" and cliente_id:
             cur.execute(

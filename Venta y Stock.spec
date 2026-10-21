@@ -30,7 +30,10 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["customtkinter", "tkinter", "pytest"],
+    # El ejecutable de escritorio usa SQLite (no PostgreSQL): por eso el
+    # driver psycopg queda fuera. Reduce el tamano del .exe y evita que
+    # PyInstaller empaquete la libreria libpq.
+    excludes=["customtkinter", "tkinter", "pytest", "psycopg", "psycopg2"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
